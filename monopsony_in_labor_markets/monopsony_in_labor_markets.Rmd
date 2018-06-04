@@ -1,0 +1,92 @@
+---
+title: "Monopsony in Labor Markets"
+output: html_document
+---
+
+```{r}
+#https://www.census.gov/ces/dataproducts/bds/data_firm.html
+#https://www.census.gov/data/tables/time-series/demo/income-poverty/historical-income-households.html
+#https://github.com/jmtaber129/unemployment-visualization/blob/master/unemployment.csv
+library(plyr)
+library(dplyr)
+library(reshape2)
+#install.packages("stargazer")
+library(stargazer)
+```
+
+```{r}
+setwd("~/Downloads/political data/")
+firm.size.by.state.ts<-read.csv("bds_f_szst_release.csv",header=T,stringsAsFactors=F)
+state.med.wage.ts<-read.csv("median wage by state.csv",header=T,stringsAsFactors=F,skip=1)
+state.unemployment<-read.csv("unemployment.csv",header=T,stringsAsFactors=F)
+```
+
+```{r}
+state.unemployment<-state.unemployment[state.unemployment$month=="Dec",]
+firm.size.by.state.ts<-ddply(firm.size.by.state.ts,.(year2,state),transform,MShare=Emp/sum(Emp))
+firm.size.by.state.ts<-ddply(firm.size.by.state.ts,.(year2,state),summarize,
+                             HHI=sum((100*MShare)^2),
+                             large.f.share=sum(Emp[fsize%in%c("l) 10000+")])/sum(Emp),
+                             num.large.firms=sum(Firms[fsize%in%c("l) 10000+")]),
+                             num.large.firms=sum(Firms[fsize%in%c("l) 10000+")]),
+                             num.nonlarge.firms=sum(Firms[!fsize%in%c("l) 10000+")]),
+                             num.small.firms=sum(Firms[!fsize%in%c("l) 10000+","k) 5000 to 9999",
+                                                                   "j) 2500 to 4999","i) 1000 to 2499")]),
+                             frac.large.firms=sum(Firms[fsize%in%c("l) 10000+")])/sum(Firms))
+state.med.wage.ts<-melt(state.med.wage.ts,id.vars="State")
+colnames(state.med.wage.ts)<-c("state.name","year","wage")
+state.med.wage.ts$year<-as.numeric(substring(state.med.wage.ts$year,2))
+state.med.wage.ts$wage<-as.numeric(gsub(",","",state.med.wage.ts$wage))
+tmp<-left_join(data.frame(state.abb,state.name,stringsAsFactors=F),
+               unique(counties[,c("state","state_fips")]),by=c("state.abb"="state"))
+tmp$state<-as.numeric(tmp$state_fips)
+state.med.wage.ts<-left_join(state.med.wage.ts,tmp,by=c("state.name"="state.name"))
+dat<-inner_join(state.med.wage.ts,firm.size.by.state.ts,by=c("state"="state","year"="year2"))
+dat<-inner_join(dat,state.unemployment,by=c("state.name"="state","year"="year"))
+state.unemployment$year.lag<-state.unemployment$year+1
+state.unemployment.lag<-state.unemployment[,c("year.lag","state","unemployment")]
+colnames(state.unemployment.lag)[3]<-"unemployment.lag"
+dat<-left_join(dat,state.unemployment.lag,by=c("state.name"="state","year"="year.lag"))
+wage.lag<-dat[,c("year","state.name","wage")]
+colnames(wage.lag)[1]<-"year.lag"
+wage.lag$year.lag<-wage.lag$year.lag+1
+colnames(wage.lag)[3]<-"wage.lag"
+dat<-left_join(dat,wage.lag,by=c("state.name"="state.name","year"="year.lag"))
+```
+
+```{r}
+par(mfrow=c(1,2))
+tmp<-tapply(dat$HHI,dat$year,median)
+plot(names(tmp),tmp,type="b",pch=19,col="royalblue2",lwd=3,xlab="Year",ylab="HHI",main="Median State")
+tmp<-tapply(dat$large.f.share,dat$year,median)
+plot(names(tmp),tmp,type="b",pch=19,col="orange2",lwd=3,xlab="Year",ylab="Large Firm Share Employment",
+     main="Median State")
+par(mfrow=c(1,2))
+tmp<-tapply(dat$num.large.firms,dat$year,median)
+plot(names(tmp),tmp,type="b",pch=19,col="royalblue2",lwd=3,xlab="Year",ylab="N Large Firms",
+     main="Median State")
+tmp<-tapply(dat$frac.large.firms,dat$year,median)
+plot(names(tmp),tmp,type="b",pch=19,col="orange2",lwd=3,xlab="Year",ylab="Large Firm Share Employers",
+     main="Median State")
+```
+
+```{r,results='asis'}
+reg1<-lm(wage~large.f.share+year,data=dat)
+reg2<-lm(wage~large.f.share+year+unemployment.lag,data=dat)
+reg3<-lm(wage~large.f.share+year+unemployment.lag+wage.lag+state,data=dat)
+reg4<-lm(wage~HHI+year,data=dat)
+reg5<-lm(wage~HHI+year+unemployment.lag,data=dat)
+reg6<-lm(wage~HHI+year+unemployment.lag+wage.lag,data=dat)
+stargazer(reg1,reg2,reg3,reg4,reg5,reg6,type="html",style="aer",intercept.bottom=F,
+          covariate.labels=c("Constant","Large Firm Share","HHI","Year","Unemployment Lag","Wage Lag"),
+          dep.var.labels=c("Median Household Income"),
+          omit.stat=c("ll","aic","bic","f","adj.rsq","ser"))
+```
+
+```{r}
+tmp<-sapply(by(dat[,c("wage","large.f.share")],dat$year,cor),function(x) x[1,2])
+plot(names(tmp),tmp,type="l",xlab="Year",ylab="Correlation",
+     main="Median Household Income & Share Large Firm Employment")
+```
+
+
