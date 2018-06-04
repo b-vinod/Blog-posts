@@ -1,0 +1,144 @@
+---
+title: "ANES Political Polarization"
+output:
+  html_document:
+    code_folding: hide
+    number_sections: no
+    theme: cosmo
+    toc: yes
+    toc_float: yes
+  pdf_document:
+    toc: yes
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+---
+
+```{r}
+#http://www.electionstudies.org/studypages/anes_timeseries_cdf/anes_timeseries_cdf.htm
+#install.packages("data.table")
+library(data.table)
+library(readxl)
+library(plyr)
+library(dplyr)
+#install.packages("stargazer")
+library(stargazer)
+```
+
+```{r}
+setwd("~/Downloads/political data/")
+anes<-read.table("anes_timeseries_cdf_rawdata.txt",stringsAsFactors=F,header=T,sep="|")
+#restrict to desired columns
+#Survey year VCF0004
+#Weight VCF0009z --> based on appropriate weight for these variables
+#Democrats thermometer VCF0201
+#Republicans thermometer VCF0202
+#Liberal thermometer VCF0211
+#Conservatives thermometer VCF0212
+#Democratic party thermometer VCF0218
+#Republican party thermometer VCF0224
+#Congress thermometer VCF0228
+#Federal government thermometer VCF0231
+#Partisan lean VCF0301
+#Party identification (original) VCF0302
+#Party identification (including leaners) VCF0303
+#Partisan strength VCF0305
+#Interest in political elections VCF0310
+#Democratic party salience VCF0316
+#Republican party salience VCF0320
+#Respondent gender VCF0104
+#Race three categories VCF0106
+#Respondent age VCF0101
+#Education VCF0110
+#Census region VCF0112
+#Income group VCF0114
+anes<-anes[,c("VCF0004","VCF0009z","VCF0201","VCF0202","VCF0211","VCF0212","VCF0218","VCF0224","VCF0228",
+              "VCF0231","VCF0301","VCF0302","VCF0303","VCF0305","VCF0310","VCF0316","VCF0320","VCF0104",
+              "VCF0106","VCF0101","VCF0110","VCF0112","VCF0114")]
+colnames(anes)<-c("Year","Weight","Dem.Thermometer","Rep.Thermometer","Lib.Thermometer",
+                  "Con.Thermometer","Dem.Party.Thermometer","Rep.Party.Thermometer",
+                  "Congress.Thermometer","Fed.Gov.Thermometer","Partisan.Lean",
+                  "Party.ID.Orig","Party.ID.Lean","Partisan.Strength","Int.Elections",
+                  "Dem.Party.Salience","Rep.Party.Salience","Gender","Race","Age",
+                  "Education","Census.Region","Income.Group")
+#semiparametric regression interacted with lean over time to show polarization
+anes$Party.ID.Lean.factor<-factor(ifelse(anes$Party.ID.Lean==1,"Democrat",
+                                         ifelse(anes$Party.ID.Lean==3,"Republican","Other")))
+anes$Party.ID.Lean.color<-ifelse(anes$Party.ID.Lean.factor=="Democrat","royalblue2",
+                                 ifelse(anes$Party.ID.Lean.factor=="Republican","tomato2",
+                                        "black"))
+anes<-anes[anes$Year>=min(anes$Year[!is.na(anes$Dem.Thermometer)]),]
+anes$Time.Trend<-anes$Year-min(anes$Year)
+```
+
+```{r}
+par(mfrow=c(1,2))
+plot(anes$Year[anes$Party.ID.Lean%in%c(1,3)],anes$Lib.Thermometer[anes$Party.ID.Lean%in%c(1,3)],
+     pch=19,col=anes$Party.ID.Lean.color[anes$Party.ID.Lean%in%c(1,3)],
+     xlab="Year",ylab="Liberal Thermometer")
+abline(lm(Lib.Thermometer~Year,data=anes[anes$Party.ID.Lean%in%c(1),],
+          weights=anes$Weight[anes$Party.ID.Lean%in%c(1)]),col="royalblue4",lwd=4)
+abline(lm(Lib.Thermometer~Year,anes[anes$Party.ID.Lean%in%c(3),],
+       weights=anes$Weight[anes$Party.ID.Lean%in%c(3)]),col="tomato4",lwd=4)
+plot(anes$Year[anes$Party.ID.Lean%in%c(1,3)],anes$Con.Thermometer[anes$Party.ID.Lean%in%c(1,3)],
+     pch=19,col=anes$Party.ID.Lean.color[anes$Party.ID.Lean%in%c(1,3)],
+     xlab="Year",ylab="Conservative Thermometer")
+abline(lm(Con.Thermometer~Year,data=anes[anes$Party.ID.Lean%in%c(1),],
+          weights=anes$Weight[anes$Party.ID.Lean%in%c(1)]),col="royalblue4",lwd=4)
+abline(lm(Con.Thermometer~Year,anes[anes$Party.ID.Lean%in%c(3),],
+       weights=anes$Weight[anes$Party.ID.Lean%in%c(3)]),col="tomato4",lwd=4)
+```
+
+```{r}
+reg1<-lm(Lib.Thermometer~Party.ID.Lean.factor+Time.Trend*Party.ID.Lean.factor,
+         data=anes[anes$Party.ID.Lean%in%c(1,3),])
+reg2<-lm(Lib.Thermometer~Party.ID.Lean.factor+Time.Trend*Party.ID.Lean.factor+Int.Elections+
+           Gender+Age+Education+Census.Region+Income.Group,
+         data=anes[anes$Party.ID.Lean%in%c(1,3),])
+reg3<-lm(Con.Thermometer~Party.ID.Lean.factor+Time.Trend*Party.ID.Lean.factor,
+         data=anes[anes$Party.ID.Lean%in%c(1,3),])
+reg4<-lm(Con.Thermometer~Party.ID.Lean.factor+Time.Trend*Party.ID.Lean.factor+Int.Elections+
+           Gender+Age+Education+Census.Region+Income.Group,
+         data=anes[anes$Party.ID.Lean%in%c(1,3),])
+stargazer(reg1,reg2,reg3,reg4,type="html",style="aer",intercept.bottom=F,
+          omit=c("Int.Elections","Gender","Age","Education","Census","Income"),
+          covariate.labels=c("Democrat","Republican","Democrat Time Trend","Republican Time Trend"),
+          dep.var.labels=c("Liberal Thermometer","Conservative Thermometer"),
+          omit.stat=c("ll","aic","bic","f","adj.rsq","ser"),
+          add.lines=list(c("Demographic Controls","No","Yes","No","Yes")))
+```
+
+```{r}
+par(mfrow=c(1,2))
+plot(anes$Year[anes$Party.ID.Lean%in%c(1,3)],anes$Dem.Party.Thermometer[anes$Party.ID.Lean%in%c(1,3)],
+     pch=19,col=anes$Party.ID.Lean.color[anes$Party.ID.Lean%in%c(1,3)],
+     xlab="Year",ylab="Dem Party Thermometer",xlim=c(1978,2012))
+abline(lm(Dem.Party.Thermometer~Year,data=anes[anes$Party.ID.Lean%in%c(1),],
+          weights=anes$Weight[anes$Party.ID.Lean%in%c(1)]),col="royalblue4",lwd=4)
+abline(lm(Dem.Party.Thermometer~Year,anes[anes$Party.ID.Lean%in%c(3),],
+       weights=anes$Weight[anes$Party.ID.Lean%in%c(3)]),col="tomato4",lwd=4)
+plot(anes$Year[anes$Party.ID.Lean%in%c(1,3)],anes$Rep.Party.Thermometer[anes$Party.ID.Lean%in%c(1,3)],
+     pch=19,col=anes$Party.ID.Lean.color[anes$Party.ID.Lean%in%c(1,3)],
+     xlab="Year",ylab="Rep Party Thermometer",xlim=c(1978,2012))
+abline(lm(Rep.Party.Thermometer~Year,data=anes[anes$Party.ID.Lean%in%c(1),],
+          weights=anes$Weight[anes$Party.ID.Lean%in%c(1)]),col="royalblue4",lwd=4)
+abline(lm(Rep.Party.Thermometer~Year,anes[anes$Party.ID.Lean%in%c(3),],
+       weights=anes$Weight[anes$Party.ID.Lean%in%c(3)]),col="tomato4",lwd=4)
+```
+
+```{r}
+reg1<-lm(Dem.Party.Thermometer~Party.ID.Lean.factor+Time.Trend*Party.ID.Lean.factor,
+         data=anes[anes$Party.ID.Lean%in%c(1,3),],weights=anes$Weight[anes$Party.ID.Lean%in%c(1,3)])
+reg2<-lm(Dem.Party.Thermometer~Party.ID.Lean.factor+Time.Trend*Party.ID.Lean.factor+Int.Elections+
+           Gender+Age+Education+Census.Region+Income.Group,
+         data=anes[anes$Party.ID.Lean%in%c(1,3),],weights=anes$Weight[anes$Party.ID.Lean%in%c(1,3)])
+reg3<-lm(Rep.Party.Thermometer~Party.ID.Lean.factor+Time.Trend*Party.ID.Lean.factor,
+         data=anes[anes$Party.ID.Lean%in%c(1,3),],weights=anes$Weight[anes$Party.ID.Lean%in%c(1,3)])
+reg4<-lm(Rep.Party.Thermometer~Party.ID.Lean.factor+Time.Trend*Party.ID.Lean.factor+Int.Elections+
+           Gender+Age+Education+Census.Region+Income.Group,
+         data=anes[anes$Party.ID.Lean%in%c(1,3),],weights=anes$Weight[anes$Party.ID.Lean%in%c(1,3)])
+stargazer(reg1,reg2,reg3,reg4,type="html",style="aer",intercept.bottom=F,
+          omit=c("Int.Elections","Gender","Age","Education","Census","Income"),
+          covariate.labels=c("Democrat","Republican","Democrat Time Trend","Republican Time Trend"),
+          dep.var.labels=c("Democratic Party Thermometer","Republican Party Thermometer"),
+          omit.stat=c("ll","aic","bic","f","adj.rsq","ser"),
+          add.lines=list(c("Demographic Controls","No","Yes","No","Yes")))
+```
