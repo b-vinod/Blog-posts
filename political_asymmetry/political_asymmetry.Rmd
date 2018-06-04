@@ -1,0 +1,163 @@
+---
+title: "Political Asymmetry"
+output:
+  html_document:
+    code_folding: hide
+    number_sections: no
+    theme: cosmo
+    toc: yes
+    toc_float: yes
+  pdf_document:
+    toc: yes
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+---
+
+```{r}
+#http://www.electionstudies.org/studypages/anes_timeseries_cdf/anes_timeseries_cdf.htm
+#install.packages("data.table")
+library(data.table)
+library(readxl)
+library(plyr)
+library(dplyr)
+#install.packages("stargazer")
+library(stargazer)
+```
+
+A lot has been written about the current state of politics in the United States and trying to explain it using two related but fundamentally different issues: (1) political polarization and (2) political tribalism.
+
+Political polarization refers to the level of overlap between the two parties on various issues. High political polarization leads to little agreement between the two parties, fostering an environment with strong, heated arguments. When exhibited among political parties and elected officials, it can lead to gridlock while when existing amongst the general public, it can lead to the election of extreme candidates, reflecting the public's level of polarization, driving gridlock as well. It is clear we see evidence of polarization among both in the current state of US politics.
+
+Political tribalism refers to people viewing the parties as a form of identity and clinging strongly to their side over the other, creating an environment where loyalty trumps all else. At the extreme this means it is less about the issues and more about success for one's own group over others and that group membership is valued above ideological consistency or the actual substance of a group's beliefs.
+
+The two phenomena are distinct in that they don't really refer to the same thing, but it is easy to see how tribalism can drive polarization in a feedback loop. As party identification becomes a source of loyalty and way to define oneself, we know from decades of social science and psychological research what can happen. [The same out group issues of dehumanization](https://www.vox.com/science-and-health/2017/3/7/14456154/dehumanization-psychology-explained) and hatred of others that we see with regards to race and religion can infect politics. When this happens, it drives the parties further apart, creating high levels of polarization, which in turn makes party identification even stronger as differences between the two sides become even starker.
+
+Annecdotally, this seems to explain the underlying forces in American politics today. We know there is both a high level of polariztion and tribalism, and it easy to see how these two forces feed off of one another. The question is what started this vicious cycle?
+
+We know that ideological sorting, the phenomenom of people moving to areas where they are surrounded by like minded individuals, is becoming more prominent. As individuals move to more homogeneous areas, they have less reference points for people with opposite beliefs who are members of the other party. This lack of anchors on knowing people with different beliefs well, feeds into the same psycological phenomena above that drives racial animosity. We dehumanize the other side and think less of them because there are no familiar reminders of their humanity and sensibility, leading to political tribalism and polarization.
+
+Here in this story we see a plausible mechanism for how geographic isolation of individuals in ideological enclaves is driving political polariztion and tribalism. The existence of this mechanism seems obvious when we overlay it with the many articles online about these issues, but let's dig into the data to see if it holds up. While theoretically distinct, political polarization and tribalism are hard to separate in the data, so we will lump them together.
+
+The data we will use come from two surveys typically used by political scientists to measure the public's opinion on a whole host of issues and to understand election outcomes. The first is the ANES, which is a yearly national survey that seeks to explain why election outcomes occur, and the second is the CCES, a yearly survey focused on general political attitudes. The CCES allows us to look at things across different states because of its larger sample size, but its time horizon is more limited, starting in 2006, while the ANES goes all the way back to 1970, but it is only accurate at the national level. Therefore, both surveys are useful in examining the issues above.
+
+First, we will use the ANES to look at how we know that political polarization/tribalism exists. We can use the thermometer question in the survey that asks respondents how they feel about Conservatives and Liberals on a 0-100 scale (referencing temperature) with higher numbers indicating a greater affinity. We can examine how this rating correlates with identity.
+
+```{r}
+setwd("~/Downloads/political data/")
+#anes<-fread("anes_timeseries_cdf_rawdata.txt",stringsAsFactors=F,header=T,sep="|")
+anes<-read.table("anes_timeseries_cdf_rawdata.txt",stringsAsFactors=F,header=T,sep="|")
+#restrict to desired columns
+#Survey year VCF0004
+#Weight VCF0009z --> based on appropriate weight for these variables
+#Democrats thermometer VCF0201
+#Republicans thermometer VCF0202
+#Liberal thermometer VCF0211
+#Conservatives thermometer VCF0212
+#Democratic party thermometer VCF0218
+#Republican party thermometer VCF0224
+#Congress thermometer VCF0228
+#Federal government thermometer VCF0231
+#Partisan lean VCF0301
+#Party identification (original) VCF0302
+#Party identification (including leaners) VCF0303
+#Partisan strength VCF0305
+#Interest in political elections VCF0310
+#Democratic party salience VCF0316
+#Republican party salience VCF0320
+#Respondent gender VCF0104
+#Race three categories VCF0106
+#Respondent age VCF0101
+#Education VCF0110
+#Census region VCF0112
+#Income group VCF0114
+anes<-anes[,c("VCF0004","VCF0009z","VCF0201","VCF0202","VCF0211","VCF0212","VCF0218","VCF0224","VCF0228",
+              "VCF0231","VCF0301","VCF0302","VCF0303","VCF0305","VCF0310","VCF0316","VCF0320","VCF0104",
+              "VCF0106","VCF0101","VCF0110","VCF0112","VCF0114")]
+colnames(anes)<-c("Year","Weight","Dem.Thermometer","Rep.Thermometer","Lib.Thermometer",
+                  "Con.Thermometer","Dem.Party.Thermometer","Rep.Party.Thermometer",
+                  "Congress.Thermometer","Fed.Gov.Thermometer","Partisan.Lean",
+                  "Party.ID.Orig","Party.ID.Lean","Partisan.Strength","Int.Elections",
+                  "Dem.Party.Salience","Rep.Party.Salience","Gender","Race","Age",
+                  "Education","Census.Region","Income.Group")
+#semiparametric regression interacted with lean over time to show polarization
+anes$Party.ID.Lean.factor<-factor(ifelse(anes$Party.ID.Lean==1,"Democrat",
+                                         ifelse(anes$Party.ID.Lean==3,"Republican","Other")))
+anes$Party.ID.Lean.color<-ifelse(anes$Party.ID.Lean.factor=="Democrat","royalblue2",
+                                 ifelse(anes$Party.ID.Lean.factor=="Republican","tomato2",
+                                        "black"))
+anes<-anes[anes$Year>=min(anes$Year[!is.na(anes$Dem.Thermometer)]),]
+anes$Time.Trend<-anes$Year-min(anes$Year)
+```
+
+```{r}
+par(mfrow=c(1,2))
+plot(anes$Year[anes$Party.ID.Lean%in%c(1,3)],anes$Lib.Thermometer[anes$Party.ID.Lean%in%c(1,3)],
+     pch=19,col=anes$Party.ID.Lean.color[anes$Party.ID.Lean%in%c(1,3)],
+     xlab="Year",ylab="Liberal Thermometer")
+abline(lm(Lib.Thermometer~Year,data=anes[anes$Party.ID.Lean%in%c(1),],
+          weights=anes$Weight[anes$Party.ID.Lean%in%c(1)]),col="royalblue4",lwd=4)
+abline(lm(Lib.Thermometer~Year,anes[anes$Party.ID.Lean%in%c(3),],
+       weights=anes$Weight[anes$Party.ID.Lean%in%c(3)]),col="tomato4",lwd=4)
+plot(anes$Year[anes$Party.ID.Lean%in%c(1,3)],anes$Con.Thermometer[anes$Party.ID.Lean%in%c(1,3)],
+     pch=19,col=anes$Party.ID.Lean.color[anes$Party.ID.Lean%in%c(1,3)],
+     xlab="Year",ylab="Conservative Thermometer")
+abline(lm(Con.Thermometer~Year,data=anes[anes$Party.ID.Lean%in%c(1),],
+          weights=anes$Weight[anes$Party.ID.Lean%in%c(1)]),col="royalblue4",lwd=4)
+abline(lm(Con.Thermometer~Year,anes[anes$Party.ID.Lean%in%c(3),],
+       weights=anes$Weight[anes$Party.ID.Lean%in%c(3)]),col="tomato4",lwd=4)
+```
+
+```{r}
+reg1<-lm(Lib.Thermometer~Party.ID.Lean.factor+Time.Trend*Party.ID.Lean.factor,
+         data=anes[anes$Party.ID.Lean%in%c(1,3),])
+reg2<-lm(Lib.Thermometer~Party.ID.Lean.factor+Time.Trend*Party.ID.Lean.factor+Int.Elections+
+           Gender+Age+Education+Census.Region+Income.Group,
+         data=anes[anes$Party.ID.Lean%in%c(1,3),])
+reg3<-lm(Con.Thermometer~Party.ID.Lean.factor+Time.Trend*Party.ID.Lean.factor,
+         data=anes[anes$Party.ID.Lean%in%c(1,3),])
+reg4<-lm(Con.Thermometer~Party.ID.Lean.factor+Time.Trend*Party.ID.Lean.factor+Int.Elections+
+           Gender+Age+Education+Census.Region+Income.Group,
+         data=anes[anes$Party.ID.Lean%in%c(1,3),])
+stargazer(reg1,reg2,reg3,reg4,type="html",style="aer",intercept.bottom=F,
+          omit=c("Int.Elections","Gender","Age","Education","Census","Income"),
+          covariate.labels=c("Democrat","Republican","Democrat Time Trend","Republican Time Trend"),
+          dep.var.labels=c("Liberal Thermometer","Conservative Thermometer"),
+          omit.stat=c("ll","aic","bic","f","adj.rsq","ser"),
+          add.lines=list(c("Demographic Controls","No","Yes","No","Yes")))
+```
+
+```{r}
+par(mfrow=c(1,2))
+plot(anes$Year[anes$Party.ID.Lean%in%c(1,3)],anes$Dem.Party.Thermometer[anes$Party.ID.Lean%in%c(1,3)],
+     pch=19,col=anes$Party.ID.Lean.color[anes$Party.ID.Lean%in%c(1,3)],
+     xlab="Year",ylab="Dem Party Thermometer",xlim=c(1978,2012))
+abline(lm(Dem.Party.Thermometer~Year,data=anes[anes$Party.ID.Lean%in%c(1),],
+          weights=anes$Weight[anes$Party.ID.Lean%in%c(1)]),col="royalblue4",lwd=4)
+abline(lm(Dem.Party.Thermometer~Year,anes[anes$Party.ID.Lean%in%c(3),],
+       weights=anes$Weight[anes$Party.ID.Lean%in%c(3)]),col="tomato4",lwd=4)
+plot(anes$Year[anes$Party.ID.Lean%in%c(1,3)],anes$Rep.Party.Thermometer[anes$Party.ID.Lean%in%c(1,3)],
+     pch=19,col=anes$Party.ID.Lean.color[anes$Party.ID.Lean%in%c(1,3)],
+     xlab="Year",ylab="Rep Party Thermometer",xlim=c(1978,2012))
+abline(lm(Rep.Party.Thermometer~Year,data=anes[anes$Party.ID.Lean%in%c(1),],
+          weights=anes$Weight[anes$Party.ID.Lean%in%c(1)]),col="royalblue4",lwd=4)
+abline(lm(Rep.Party.Thermometer~Year,anes[anes$Party.ID.Lean%in%c(3),],
+       weights=anes$Weight[anes$Party.ID.Lean%in%c(3)]),col="tomato4",lwd=4)
+```
+
+```{r}
+reg1<-lm(Dem.Party.Thermometer~Party.ID.Lean.factor+Time.Trend*Party.ID.Lean.factor,
+         data=anes[anes$Party.ID.Lean%in%c(1,3),],weights=anes$Weight[anes$Party.ID.Lean%in%c(1,3)])
+reg2<-lm(Dem.Party.Thermometer~Party.ID.Lean.factor+Time.Trend*Party.ID.Lean.factor+Int.Elections+
+           Gender+Age+Education+Census.Region+Income.Group,
+         data=anes[anes$Party.ID.Lean%in%c(1,3),],weights=anes$Weight[anes$Party.ID.Lean%in%c(1,3)])
+reg3<-lm(Rep.Party.Thermometer~Party.ID.Lean.factor+Time.Trend*Party.ID.Lean.factor,
+         data=anes[anes$Party.ID.Lean%in%c(1,3),],weights=anes$Weight[anes$Party.ID.Lean%in%c(1,3)])
+reg4<-lm(Rep.Party.Thermometer~Party.ID.Lean.factor+Time.Trend*Party.ID.Lean.factor+Int.Elections+
+           Gender+Age+Education+Census.Region+Income.Group,
+         data=anes[anes$Party.ID.Lean%in%c(1,3),],weights=anes$Weight[anes$Party.ID.Lean%in%c(1,3)])
+stargazer(reg1,reg2,reg3,reg4,type="html",style="aer",intercept.bottom=F,
+          omit=c("Int.Elections","Gender","Age","Education","Census","Income"),
+          covariate.labels=c("Democrat","Republican","Democrat Time Trend","Republican Time Trend"),
+          dep.var.labels=c("Democratic Party Thermometer","Republican Party Thermometer"),
+          omit.stat=c("ll","aic","bic","f","adj.rsq","ser"),
+          add.lines=list(c("Demographic Controls","No","Yes","No","Yes")))
+```
