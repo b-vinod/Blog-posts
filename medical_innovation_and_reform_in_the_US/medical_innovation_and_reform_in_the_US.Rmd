@@ -1,0 +1,74 @@
+---
+title: "US Medical Innovation"
+output: html_document
+---
+
+```{r}
+library(reshape2)
+library(plyr)
+library(dplyr)
+```
+
+```{r}
+setwd("~/Downloads/political data/")
+patent.ts<-read.csv("patent grants timeseries.csv",stringsAsFactors=F)
+```
+
+```{r}
+patent.ts[is.na(patent.ts)]<-0
+patent.ts$Technology[patent.ts$Technology=="11 - Analysis of biological materials"]<-"Biological.Material"
+patent.ts$Technology[patent.ts$Technology=="13 - Medical technology"]<-"Medical.Technology"
+patent.ts$Technology[patent.ts$Technology=="15 - Biotechnology"]<-"Biotechnology"
+patent.ts$Technology[patent.ts$Technology=="16 - Pharmaceuticals"]<-"Pharmaceuticals"
+patent.ts<-melt(patent.ts,measure.vars=grep("X",colnames(patent.ts)),variable.name="Year",
+                value.name="N_Patents")
+patent.ts$Year<-as.numeric(gsub("X","",patent.ts$Year))
+patent.ts2<-ddply(patent.ts,.(Technology,Year),summarize,
+                  N.Patents.US=sum(N_Patents[Origin.Code=="US"]),
+                  Fraction.US=sum(N_Patents[Origin.Code=="US"])/sum(N_Patents),
+                  N.Patents.CN=sum(N_Patents[Origin.Code=="CN"]),
+                  Fraction.CN=sum(N_Patents[Origin.Code=="CN"])/sum(N_Patents))
+```
+
+```{r}
+par(mfrow=c(2,2))
+plot(patent.ts2$Year[patent.ts2$Technology=="Biological.Material"],
+     patent.ts2$Fraction.US[patent.ts2$Technology=="Biological.Material"],type="l",lwd=3,col="tomato2",
+     ylim=c(0,0.5),xlab="Year",ylab="Biological Material")
+lines(patent.ts2$Year[patent.ts2$Technology=="Biological.Material"],
+      patent.ts2$Fraction.CN[patent.ts2$Technology=="Biological.Material"],type="l",lwd=3,col="tomato2",
+      lty=2)
+plot(patent.ts2$Year[patent.ts2$Technology=="Medical.Technology"],
+     patent.ts2$Fraction.US[patent.ts2$Technology=="Medical.Technology"],type="l",lwd=3,col="orange2",
+     ylim=c(0,0.5),xlab="Year",ylab="Medical Technology")
+lines(patent.ts2$Year[patent.ts2$Technology=="Medical.Technology"],
+      patent.ts2$Fraction.CN[patent.ts2$Technology=="Medical.Technology"],type="l",lwd=3,col="orange2",
+      lty=2)
+plot(patent.ts2$Year[patent.ts2$Technology=="Biotechnology"],
+     patent.ts2$Fraction.US[patent.ts2$Technology=="Biotechnology"],type="l",lwd=3,col="gold2",
+     ylim=c(0,0.5),xlab="Year",ylab="Biotechnology")
+lines(patent.ts2$Year[patent.ts2$Technology=="Biotechnology"],
+      patent.ts2$Fraction.CN[patent.ts2$Technology=="Biotechnology"],type="l",lwd=3,col="gold2",lty=2)
+plot(patent.ts2$Year[patent.ts2$Technology=="Pharmaceuticals"],
+     patent.ts2$Fraction.US[patent.ts2$Technology=="Pharmaceuticals"],type="l",lwd=3,col="red4",
+     ylim=c(0,0.5),xlab="Year",ylab="Pharmaceuticals")
+lines(patent.ts2$Year[patent.ts2$Technology=="Pharmaceuticals"],
+      patent.ts2$Fraction.CN[patent.ts2$Technology=="Pharmaceuticals"],type="l",lwd=3,col="red4",lty=2)
+```
+
+```{r}
+par(mfrow=c(2,2))
+plot(patent.ts2$Year[patent.ts2$Technology=="Biological.Material"],
+     patent.ts2$N.Patents.US[patent.ts2$Technology=="Biological.Material"],type="l",lwd=3,col="tomato2",
+     xlab="Year",ylab="Biological Material")
+plot(patent.ts2$Year[patent.ts2$Technology=="Medical.Technology"],
+     patent.ts2$N.Patents.US[patent.ts2$Technology=="Medical.Technology"],type="l",lwd=3,col="orange2",
+     xlab="Year",ylab="Medical Technology")
+plot(patent.ts2$Year[patent.ts2$Technology=="Biotechnology"],
+     patent.ts2$N.Patents.US[patent.ts2$Technology=="Biotechnology"],type="l",lwd=3,col="gold2",
+     xlab="Year",ylab="Biotechnology")
+plot(patent.ts2$Year[patent.ts2$Technology=="Pharmaceuticals"],
+     patent.ts2$N.Patents.US[patent.ts2$Technology=="Pharmaceuticals"],type="l",lwd=3,col="red4",
+     xlab="Year",ylab="Pharmaceuticals")
+```
+
