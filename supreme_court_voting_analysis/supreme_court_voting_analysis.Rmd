@@ -1,0 +1,142 @@
+---
+title: "Supreme Court Voting Analysis"
+output: html_document
+---
+
+```{r}
+setwd("~/Downloads/political data/")
+library(plyr)
+library(dplyr)
+library(mgcv)
+library(reshape2)
+library(stargazer)
+```
+
+```{r}
+#http://scdb.wustl.edu/data.php
+sp.data<-read.csv("SCDB_2017_01_justiceCentered_Citation.csv",header=T,stringsAsFactors=F)
+mq.scores<-read.csv("justices.csv",header=T,stringsAsFactors=F)
+#court.scores<-read.csv("court.csv",header=T,stringsAsFactors=F)
+salience.case<-read.csv("scdbSalience.csv",header=T,stringsAsFactors=F)
+```
+
+```{r}
+dem.years<-c(1937:1952,1961:1968,1977:1980,1993:2000,2009:2015)
+mq.scores$pres_democrat<-ifelse(mq.scores$term%in%dem.years,0,1)
+mq.scores<-mq.scores %>%
+  group_by(justice) %>%
+  mutate(appoint_year=min(term))
+mq.scores$appoint_party<-ifelse(mq.scores$appoint_year%in%dem.years,"D","R")
+mq.scores<-mq.scores %>%
+  group_by(justice) %>%
+  mutate(term_order=order(order(term,decreasing=F)))
+mq.scores<-mq.scores %>%
+  group_by(justice) %>%
+  mutate(post_mn_lag=lag(post_mn,1,order_by=term_order))
+sp.data2<-left_join(sp.data,mq.scores,by=c("justice","term","justiceName"))
+sp.data2<-left_join(sp.data2,salience.case,by=c("caseId"))
+sp.data2$direction<-sp.data2$direction-1
+```
+
+```{r}
+#do justice ideologies drift over time
+mq.scores$post_mn_diff<-mq.scores$post_mn-mq.scores$post_mn_lag
+tmp<-dcast(term_order~justiceName,value.var="post_mn",data=mq.scores)
+matplot(tmp$term_order,tmp[,-1],type="b",pch=19,xlab="Justice Term Order",ylab="Martin-Quinn Score",
+        main="Judicial Ideology Over Time")
+tmp<-dcast(term_order~justiceName,value.var="post_mn_diff",data=mq.scores)
+boxplot(mq.scores$post_mn_diff~mq.scores$term_order)
+matplot(tmp$term_order,tmp[,-1],type="b",pch=19,xlab="Justice Term Order",ylab="Martin-Quinn Score",
+        main="Difference in Judicial Ideology Over Time")
+mq.scores$post_mn_diff<-mq.scores$post_mn-mq.scores$post_mn_lag
+reg1<-lm(post_mn_diff~justiceName+term_order,data=mq.scores)
+reg2<-lm(post_mn_diff~justiceName+term_order,data=mq.scores,weight=1/mq.scores$post_sd)
+stargazer(reg1,reg2,type="html",style="aer",omit=c("Constant","justiceName"),
+          covariate.labels=c("Term Order"),dep.var.labels=c("Change in MQ-Score"),
+          omit.stat=c("ll","aic","bic","f","adj.rsq","ser"),
+          add.lines=list(c("Justice Fixed effects","Yes","Yes"),
+                         c("Weighted by MQ-Score SE","No","Yes")))
+mq.scores$currentJustice<-mq.scores$justiceName%in%mq.scores$justiceName[mq.scores$term==2016]
+median(tapply(mq.scores$term_order[!mq.scores$currentJustice],mq.scores$term_order[!mq.scores$currentJustice],max))
+mq.scores[mq.scores$term==2016,c("justiceName","post_mn")]
+```
+
+```{r}
+#how has court ideology changed over time?
+#is the court getting more polarized?
+#is the court getting more ideologically pure?
+par(mfrow=c(2,2))
+tmp<-data.frame("mq.score"=tapply(sp.data2$post_mn,sp.data2$term,median,na.rm=T))
+tmp$color<-ifelse(tmp$mq.score>0,"tomato2","royalblue2")
+plot(rownames(tmp),tmp$mq.score,type="l",pch=19,lwd=4,
+     xlab="Term",ylab="Median Martin-Quinn Score",main="Court Ideology Over Time")
+points(rownames(tmp),tmp$mq.score,pch=19,lwd=4,col=tmp$color)
+tmp<-tapply(sp.data2$post_mn,sp.data$term,function(x) max(x,na.rm=T)-min(x,na.rm=T))
+plot(names(tmp),tmp,type="l",lwd=4,xlab="Term",ylab="Max - Min Martin-Quinn Score",
+     main="Court Polarization Over Time")
+tmp1<-tapply(sp.data2$post_mn[sp.data2$post_mn>0],sp.data2$term[sp.data2$post_mn>0],
+            function(x) sd(x,na.rm=T))
+tmp2<-tapply(sp.data2$post_mn[sp.data2$post_mn<0],sp.data2$term[sp.data2$post_mn<0],
+            function(x) sd(x,na.rm=T))
+#plot(names(tmp1),tmp1,type="l",lwd=4,xlab="Term",ylab="SD of Conservative and Liberal Justices",
+#     main="Court Ideological Purity Over Time",col="tomato2",ylim=c(0,3))
+#lines(names(tmp2),tmp2,type="l",lwd=4,xlab="Term",ylab="SD of Conservative and Liberal Justices",
+#     main="Court Ideological Purity Over Time",col="royalblue2")
+boxplot(sp.data2$post_mn[sp.data2$post_mn>0]~sp.data2$term[sp.data2$post_mn>0],col="tomato2",
+        xlab="Term",ylab="Distribution of Martin-Quinn Scores",
+        main="Conservative Justices Ideological Purity Over Time")
+boxplot(sp.data2$post_mn[sp.data2$post_mn<0]~sp.data2$term[sp.data2$post_mn<0],col="royalblue2",
+        xlab="Term",ylab="Distribution of Martin-Quinn Scores",
+        main="Liberal Justices Ideological Purity Over Time")
+```
+
+```{r}
+#how do justices vote?
+#for direction 1 is liberal and 0 is conservative
+gam.model1<-gam(direction~post_mn*nytSalience,data=sp.data2)
+gam.model2<-gam(direction~post_mn_lag*nytSalience,data=sp.data2)
+gam.model3<-gam(direction~justiceName+post_mn_lag*nytSalience,data=sp.data2)
+gam.model4<-gam(direction~justiceName+I(post_mn_lag>0)*nytSalience,data=sp.data2)
+stargazer(gam.model1,gam.model2,gam.model3,gam.model4,type="html",style="aer",
+          omit=c("Constant","justiceName"),
+          covariate.labels=c("MQ Score","Lag MQ Score","Lag MQ Score > 0","Case in NYTimes",
+                             "MQ Score X Case in NYTimes","Lag MQ Score X Case in NYTimes",
+                             "Lag MQ Score > 0 X Case in NYTimes"),
+          dep.var.labels=c("P(Voting for in Liberal Direction)"),
+          omit.stat=c("ll","aic","bic","f","adj.rsq","ser","ubre"),
+          add.lines=list(c("Justice Fixed effects","No","No","Yes","Yes")))
+```
+
+```{r}
+#do new justices joining influence existing justices?
+tmp<-tapply(sp.data2$post_mn[sp.data2$term_order!=1],sp.data2$term[sp.data2$term_order!=1],mean,na.rm=T)
+tmp<-data.frame("term"=names(tmp),"post_mn"=tmp,stringsAsFactors=F)
+tmp$post_mn_lead<-lead(tmp$post_mn)
+tmp2<-tapply(sp.data2$post_mn[sp.data2$term_order==1],sp.data2$term[sp.data2$term_order==1],mean,na.rm=T)
+tmp2<-data.frame("term"=names(tmp2),"post_mn_new_justice"=tmp2,stringsAsFactors=F)
+tmp<-left_join(tmp,tmp2,by="term")
+tmp$post_mn_change<-tmp$post_mn_lead-tmp$post_mn
+summary(lm(post_mn_change~post_mn_new_justice,data=tmp[!is.na(tmp$post_mn_change),]))
+tmp<-sp.data2[sp.data2$term_order!=1,]
+tmp2<-tapply(sp.data2$post_mn[sp.data2$term_order==1],sp.data2$term[sp.data2$term_order==1],mean,na.rm=T)
+tmp2<-data.frame("term"=as.numeric(names(tmp2)),"post_mn_new_justice"=c(tmp2),stringsAsFactors=F)
+tmp<-left_join(tmp,tmp2,by="term")
+tmp$new_justice<-!is.na(tmp$post_mn_new_justice)
+tmp$post_mn_new_justice[is.na(tmp$post_mn_new_justice)]<-0
+gam.model1<-gam(direction~factor(issueArea)+post_mn+s(term_order)+new_justice+
+                  new_justice:post_mn_new_justice,data=tmp)
+gam.model2<-gam(direction~factor(issueArea)+justiceName+s(term_order)+
+                  new_justice+new_justice:post_mn_new_justice,data=tmp)
+gam.model3<-gam(direction~factor(issueArea)+justiceName+s(term_order)+
+                  new_justice+new_justice:I(post_mn_new_justice>0),data=tmp)
+stargazer(gam.model1,gam.model2,gam.model3,type="html",style="aer",
+          omit=c("Constant","issueArea","justiceName","term_order","FALSE"),
+          covariate.labels=c("MQ Score","New Justice in Term",
+                             "New Justice in Term X New Justice MQ Score",
+                             "New Justice in Term X New Justice MQ Score > 0"),
+          dep.var.labels=c("P(Voting for in Liberal Direction)"),
+          omit.stat=c("ll","aic","bic","f","adj.rsq","ser","ubre"),
+          add.lines=list(c("Justice Fixed effects","No","Yes","Yes"),
+                         c("Issue Area Fixed effects","Yes","Yes","Yes"),
+                         c("Term Order Trend","Yes","Yes","Yes")))
+```
