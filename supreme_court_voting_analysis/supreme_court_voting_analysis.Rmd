@@ -15,9 +15,9 @@ library(stargazer)
 ```{r}
 #http://scdb.wustl.edu/data.php
 sp.data<-read.csv("SCDB_2017_01_justiceCentered_Citation.csv",header=T,stringsAsFactors=F)
-mq.scores<-read.csv("justices.csv",header=T,stringsAsFactors=F)
-#court.scores<-read.csv("court.csv",header=T,stringsAsFactors=F)
 salience.case<-read.csv("scdbSalience.csv",header=T,stringsAsFactors=F)
+#http://mqscores.lsa.umich.edu/measures.php
+mq.scores<-read.csv("justices.csv",header=T,stringsAsFactors=F)
 ```
 
 ```{r}
@@ -140,3 +140,4 @@ stargazer(gam.model1,gam.model2,gam.model3,type="html",style="aer",
                          c("Issue Area Fixed effects","Yes","Yes","Yes"),
                          c("Term Order Trend","Yes","Yes","Yes")))
 ```
+
