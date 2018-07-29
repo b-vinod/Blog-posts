@@ -10,7 +10,7 @@ library(readstata13)
 ```
 
 ```{r}
-#http://databank.worldbank.org/data/reports.aspx?source=2&series=NY.GDP.PCAP.CD&country=JPN,USA#
+#https://data.worldbank.org/
 setwd("~/Downloads/political data/")
 gdp.data<-read.csv("us japan gdp.csv",stringsAsFactors=F,header=T)
 colnames(gdp.data)<-c("year","year.code","country","country.code","gdp.per.capita")
@@ -23,6 +23,7 @@ lines(gdp.data$year[gdp.data$country.code=="JPN"],gdp.data$gdp.per.capita[gdp.da
 ```
 
 ```{r}
+#https://data.worldbank.org/
 country.data<-read.csv("country age demographics.csv",stringsAsFactors=F,header=T)
 country.data<-country.data[country.data$Country.Code%in%c("JPN","USA"),]
 colnames(country.data)<-c("Year","Year.Code","Country.Name","Country.Code","Age.Dependency.Old",
@@ -44,6 +45,7 @@ points(country.data$Year[country.data$Country.Code=="USA"],
 ```
 
 ```{r}
+#https://cps.ipums.org/cps/
 cps.data<-read.csv("cps_00009.csv",stringsAsFactors=F,header=T)
 cps.data<-cps.data[cps.data$YEAR>=1994,]
 cps.data$FOREIGN.BORN<-ifelse(cps.data$NATIVITY==5,0,1)
