@@ -68,16 +68,16 @@ stargazer(model1,model2,model3,model4,model5,model6,model7,model8,
                            c("Weighted by Population","No","No","No","Yes","No","No","No","Yes"))
           )
 
-model11<-lm(change.gdp~instrument+Year+Country.Code,data=country.data)
+model11<-lm(change.gdp~change.fraction+Year+Country.Code,data=country.data)
 model12<-lm(change.fraction~instrument,data=country.data)
 country.data$fitted.values<-predict(lm(change.fraction~instrument,data=country.data,na.action="na.exclude"),
                                     type="response")
 model13<-lm(change.gdp~fitted.values+Year+Country.Code,data=country.data)
 
 stargazer(model11,model12,model13,
-          keep=c("instrument","fitted.values"),
-          covariate.labels=c("Instrument","Fitted Values"),
-          column.labels=c("Reduced Form","First Stage","IV Regression"),style="aer",intercept.bottom=F,
+          keep=c("change.fraction","instrument","fitted.values"),
+          covariate.labels=c("Change Fraction Above 65","Instrument","Fitted Values"),
+          column.labels=c("OLS","First Stage","IV Regression"),style="aer",intercept.bottom=F,
           dep.var.labels=c("Change GDP","Change Fraction Above 65","Change GDP"),multicolumn=F,
           omit.stat=c("adj.rsq","ser"),type="html",digits=4,
           add.lines=list(c("Country Fixed Effects","Yes","No","Yes"),
