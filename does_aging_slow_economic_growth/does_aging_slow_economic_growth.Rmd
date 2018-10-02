@@ -1,6 +1,15 @@
+---
+title: "Does Aging Slow Economic Growth"
+output: html_document
+---
+
+```{r}
 library(plyr)
 library(dplyr)
 library(stargazer)
+```
+
+```{r}
 setwd("~/Downloads/political data/")
 #http://databank.worldbank.org/data/source/population-estimates-and-projections/preview/on#
 country.gdp<-read.csv("country gdp per capita.csv",stringsAsFactors=F,header=T)
@@ -74,5 +83,4 @@ stargazer(model11,model12,model13,
           add.lines=list(c("Country Fixed Effects","Yes","No","Yes"),
                          c("Year Fixed Effects","Yes","No","Yes"))
           )
-
-
+```
