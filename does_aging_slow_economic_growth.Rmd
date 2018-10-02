@@ -1,0 +1,78 @@
+library(plyr)
+library(dplyr)
+library(stargazer)
+setwd("~/Downloads/political data/")
+#http://databank.worldbank.org/data/source/population-estimates-and-projections/preview/on#
+country.gdp<-read.csv("country gdp per capita.csv",stringsAsFactors=F,header=T)
+colnames(country.gdp)<-c("Year","Year.Code","Country.Name","Country.Code","GDP.Per.Capita")
+country.age<-read.csv("country age demographics.csv",stringsAsFactors=F,header=T)
+colnames(country.age)<-c("Year","Year.Code","Country.Name","Country.Code","Age.Dependency.Old",
+                         "Fertility.Rate","Net.Migration","Pop.0.14.Total","Pop.15.64.Fraction",
+                         "Pop.15.64.Total","Pop.65.Above.Fraction","Pop.65.Above.Total","Pop.Total")
+world.age<-read.csv("world age demographics.csv",stringsAsFactors=F,header=T)
+colnames(world.age)[1:4]<-c("Year","Year.Code","Country.Name","Country.Code")
+world.age$Total.Over55<-apply(world.age[,-c(1:4)],1,function(x) sum(as.numeric(x)))
+world.age$Year.10<-as.character(as.numeric(world.age$Year)+10)
+world.age<-inner_join(world.age,world.age,by=c("Year.10"="Year","Country.Name","Country.Code"))
+world.age$Ratio<-world.age$Total.Over55.y/world.age$Total.Over55.x
+country.age.Over55<-world.age[world.age$Country.Name!="World",c("Year","Country.Code","Total.Over55.x")]
+world.age<-world.age[world.age$Country.Name=="World",c("Year","Ratio")]
+country.data<-inner_join(country.gdp,country.age,by=c("Year","Year.Code","Country.Name","Country.Code"))
+country.data$Year.10<-as.character(as.numeric(country.data$Year)+10)
+country.data<-inner_join(country.data,country.data,by=c("Year.10"="Year","Country.Name","Country.Code"))
+country.data<-left_join(country.data,world.age,by=c("Year"))
+country.data<-left_join(country.data,country.age.Over55,by=c("Year","Country.Code"))
+country.data$change.gdp<-
+  log(as.numeric(country.data$GDP.Per.Capita.y))-log(as.numeric(country.data$GDP.Per.Capita.x))
+country.data$change.dependency<-
+  log(as.numeric(country.data$Age.Dependency.Old.y))-log(as.numeric(country.data$Age.Dependency.Old.x))
+country.data$change.fraction<-
+  log(as.numeric(country.data$Pop.65.Above.Total.y)/
+        (as.numeric(country.data$Pop.Total.y)-as.numeric(country.data$Pop.0.14.Total.y)))-
+  log(as.numeric(country.data$Pop.65.Above.Total.x)/
+        (as.numeric(country.data$Pop.Total.x)-as.numeric(country.data$Pop.0.14.Total.x)))
+country.data$instrument<-
+  log(country.data$Total.Over55.x*country.data$Ratio/
+        (as.numeric(country.data$Pop.Total.y)-as.numeric(country.data$Pop.0.14.Total.y)))-
+  log(as.numeric(country.data$Pop.65.Above.Total.x)/
+        (as.numeric(country.data$Pop.Total.x)-as.numeric(country.data$Pop.0.14.Total.x)))
+
+country.data<-country.data[as.numeric(country.data$Year)%%10==0,]
+model1<-lm(change.gdp~change.dependency,data=country.data)
+model2<-lm(change.gdp~change.dependency+Country.Code,data=country.data)
+model3<-lm(change.gdp~change.dependency+Year+Country.Code,data=country.data)
+model4<-lm(change.gdp~change.dependency+Year+Country.Code,data=country.data,
+           weight=as.numeric(country.data$Pop.Total.x))
+model5<-lm(change.gdp~change.fraction,data=country.data)
+model6<-lm(change.gdp~change.fraction+Country.Code,data=country.data)
+model7<-lm(change.gdp~change.fraction+Year+Country.Code,data=country.data)
+model8<-lm(change.gdp~change.fraction+Year+Country.Code,data=country.data,
+           weight=as.numeric(country.data$Pop.Total.x))
+stargazer(model1,model2,model3,model4,model5,model6,model7,model8,
+          keep=c("change.dependency","change.fraction"),
+          covariate.labels=c("Change in Age Dependency Ratio","Change in Fraction Above 65"),
+          column.labels=c("","","","","","","",""),style="aer",intercept.bottom=F,
+          dep.var.labels=c("","","","","","","",""),multicolumn=F,
+          omit.stat=c("adj.rsq","f","ser"),type="html",digits=4,
+          add.lines=list(c("Country Fixed Effects","No","Yes","Yes","Yes","No","Yes","Yes","Yes"),
+                           c("Year Fixed Effects","No","No","Yes","Yes","No","No","Yes","Yes"),
+                           c("Weighted by Population","No","No","No","Yes","No","No","No","Yes"))
+          )
+
+model11<-lm(change.gdp~instrument+Year+Country.Code,data=country.data)
+model12<-lm(change.fraction~instrument,data=country.data)
+country.data$fitted.values<-predict(lm(change.fraction~instrument,data=country.data,na.action="na.exclude"),
+                                    type="response")
+model13<-lm(change.gdp~fitted.values+Year+Country.Code,data=country.data)
+
+stargazer(model11,model12,model13,
+          keep=c("instrument","fitted.values"),
+          covariate.labels=c("Instrument","Fitted Values"),
+          column.labels=c("Reduced Form","First Stage","IV Regression"),style="aer",intercept.bottom=F,
+          dep.var.labels=c("Change GDP","Change Fraction Above 65","Change GDP"),multicolumn=F,
+          omit.stat=c("adj.rsq","ser"),type="html",digits=4,
+          add.lines=list(c("Country Fixed Effects","Yes","No","Yes"),
+                         c("Year Fixed Effects","Yes","No","Yes"))
+          )
+
+
