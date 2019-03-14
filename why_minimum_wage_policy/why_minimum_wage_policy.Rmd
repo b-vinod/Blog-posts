@@ -1,0 +1,97 @@
+---
+title: "Why a National $15 Minimum Wage is Bad Policy"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+library(ggplot2)
+library(maps)
+library(dplyr)
+library(plyr)
+library(RColorBrewer)
+library(scales)
+```
+
+```{r setup, include=FALSE}
+minimum.wage<-read.csv("~/Downloads/minimum wage.csv",stringsAsFactors=F)
+```
+
+```{r}
+head(minimum.wage)
+tail(minimum.wage)
+```
+
+```{r}
+multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
+  library(grid)
+
+  # Make a list from the ... arguments and plotlist
+  plots <- c(list(...), plotlist)
+
+  numPlots = length(plots)
+
+  # If layout is NULL, then use 'cols' to determine layout
+  if (is.null(layout)) {
+    # Make the panel
+    # ncol: Number of columns of plots
+    # nrow: Number of rows needed, calculated from # of cols
+    layout <- matrix(seq(1, cols * ceiling(numPlots/cols)),
+                    ncol = cols, nrow = ceiling(numPlots/cols), byrow = T)
+  }
+
+ if (numPlots==1) {
+    print(plots[[1]])
+
+  } else {
+    # Set up the page
+    grid.newpage()
+    pushViewport(viewport(layout = grid.layout(nrow(layout), ncol(layout))))
+
+    # Make each plot, in the correct location
+    for (i in 1:numPlots) {
+      # Get the i,j matrix positions of the regions that contain this subplot
+      matchidx <- as.data.frame(which(layout == i, arr.ind = TRUE))
+
+      print(plots[[i]], vp = viewport(layout.pos.row = matchidx$row,
+                                      layout.pos.col = matchidx$col))
+    }
+  }
+}
+```
+
+```{r}
+#minimum.wage<-minimum.wage[minimum.wage$Minimum.Wage>0,]
+minimum.wage$State<-tolower(minimum.wage$State)
+lat.long<-map_data("state")
+lat.long<-left_join(lat.long,minimum.wage,by=c("region"="State"))
+data<-lat.long
+us.map.plot<-function(data,var_to_plot,legend.label,title,perc=F) {
+  text.location<-data %>%
+      group_by(region,Minimum.Wage,Percent.Increase.to.15,Regional.Price.Parity,Relative.Wage) %>%
+      summarize(lat=mean(lat),long=mean(long))
+  text.location<-text.location[text.location$Minimum.Wage>0,]
+  data[[var_to_plot]][data[[var_to_plot]]==0]<-NA
+  p<-ggplot(data,aes(long,lat)) +
+    geom_polygon(aes(group=group,fill=data[[var_to_plot]])) + 
+    coord_quickmap() +
+    theme(axis.title.x=element_blank(),axis.text.x=element_blank(),axis.ticks.x=element_blank()) +
+    theme(axis.title.y=element_blank(),axis.text.y=element_blank(),axis.ticks.y=element_blank()) +
+    theme(panel.grid.major=element_blank(),panel.grid.minor=element_blank(),
+          panel.border=element_blank(),panel.background=element_blank()) +
+    ggtitle(title) +
+    theme(plot.title=element_text(hjust=0.5))
+  if(perc) {
+    p<-p + scale_fill_continuous(name=legend.label,type="viridis",label=percent)
+  } else {
+    p<-p + scale_fill_continuous(name=legend.label,type="viridis",label=dollar)
+  }
+  return(p)
+}
+p1<-us.map.plot(lat.long,"Minimum.Wage","Minimum Wage","Current Minimum Wage by State",F)
+p2<-us.map.plot(lat.long,"Percent.Increase.to.15","% Increase","Change in Minimum Wage to $15",T)
+p3<-us.map.plot(lat.long,"Regional.Price.Parity","Value of $1","Value of $1 by State vs. US Avg",F)
+p4<-us.map.plot(lat.long,"Relative.Wage","Relative Wage","Adjusted Wage by State (CA at $15)",F)
+multiplot(p1,p2,p3,p4,cols=2)
+```
